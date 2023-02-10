@@ -1,10 +1,12 @@
 import { Trade, TradeType } from '@uniswap/sdk'
 import React, { useContext, useState } from 'react'
 import { Text } from 'rebass'
-import styled, { ThemeContext } from 'styled-components'
+// import styled, { ThemeContext } from 'styled-components'
+import { ThemeContext } from 'styled-components'
 import { Field } from '../../state/swap/actions'
 import { useUserSlippageTolerance } from '../../state/user/hooks'
-import { TYPE, ExternalLink } from '../../theme'
+import { TYPE } from '../../theme'
+// import { TYPE, ExternalLink } from '../../theme'
 import { computeSlippageAdjustedAmounts, computeTradePriceBreakdown } from '../../utils/prices'
 import { AutoColumn } from '../Column'
 import QuestionHelper from '../QuestionHelper'
@@ -17,15 +19,15 @@ import { useDerivedSwapInfo, useSwapState } from '../../state/swap/hooks'
 import useWrapCallback, { WrapType } from '../../hooks/useWrapCallback'
 import useToggledVersion, { Version } from '../../hooks/useToggledVersion'
 
-const InfoLink = styled(ExternalLink)`
-  width: 100%;
-  border: 1px solid ${({ theme }) => theme.bg3};
-  padding: 6px 6px;
-  border-radius: 8px;
-  text-align: center;
-  font-size: 14px;
-  color: ${({ theme }) => theme.text1};
-`
+// const InfoLink = styled(ExternalLink)`
+//   width: 100%;
+//   border: 1px solid ${({ theme }) => theme.bg3};
+//   padding: 6px 6px;
+//   border-radius: 8px;
+//   text-align: center;
+//   font-size: 14px;
+//   color: ${({ theme }) => theme.text1};
+// `
 
 function TradeSummary({ trade, allowedSlippage }: { trade: Trade; allowedSlippage: number }) {
   // swap state
@@ -156,14 +158,14 @@ export function AdvancedSwapDetails({ trade }: AdvancedSwapDetailsProps) {
               </AutoColumn>
             </>
           )}
-          <AutoColumn style={{ padding: '0 24px' }}>
+          {/* <AutoColumn style={{ padding: '0 24px' }}>
             <InfoLink
               href={'https://explorer.bcxnetwork.io/address/' + trade.route.pairs[0].liquidityToken.address}
               target="_blank"
             >
               View pair analytics ↗
             </InfoLink>
-          </AutoColumn>
+          </AutoColumn> */}
         </>
       )}
     </AutoColumn>
