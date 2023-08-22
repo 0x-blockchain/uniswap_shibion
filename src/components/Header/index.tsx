@@ -207,7 +207,7 @@ export default function Header() {
         <Title href=".">
           <UniIcon>
             <img
-              src={darkMode ? 'images/dark1.png' : 'images/dark1.png'}
+              src={darkMode ? 'images/icon.png' : 'images/icon.png'}
               alt="logo"
               width={60}
               height={70}
@@ -217,7 +217,7 @@ export default function Header() {
         </Title>
         <HeaderLinks>
           <StyledNavLink id={`swap-nav-link`} to={'/swap'}>
-            {t('Swap')}
+            {t('Block Browser')}
           </StyledNavLink>
           {/* <StyledNavLink
             id={`pool-nav-link`}
