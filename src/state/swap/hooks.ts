@@ -20,7 +20,7 @@ import { useUserSlippageTolerance } from '../user/hooks'
 import { computeSlippageAdjustedAmounts } from '../../utils/prices'
 import useETHER from '../../hooks/useETHER'
 // import { _WETH } from '../../constants'
-import {Shibion } from '../../constants'
+import { Block } from '../../constants'
 
 export function useSwapState(): AppState['swap'] {
   return useSelector<AppState, AppState['swap']>(state => state.swap)
@@ -70,7 +70,7 @@ export function useSwapActionHandlers(): {
       dispatch(
         selectCurrency({
           field: Field.OUTPUT,
-          currencyId: Shibion.address
+          currencyId: Block.address
         })
       )
     }
