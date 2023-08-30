@@ -97,7 +97,7 @@ export default function Option({
   subheader = null,
   icon,
   active = false,
-  id,
+  id
 }: {
   link?: string | null
   clickable?: boolean
