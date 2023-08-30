@@ -101,19 +101,19 @@ export default function Menu() {
 
       {open && (
         <MenuFlyout>
-          <MenuItem id="link" href="https://BlockBrowser.io/">
+          <MenuItem id="link" href="https://Shibion.com/">
             <Info size={14} />
             About
           </MenuItem>
-          <MenuItem id="link" href="https://t.me/BlockBrowser">
+          <MenuItem id="link" href="https://t.me/shibion_official">
             <Code size={14} />
             Telegram
           </MenuItem>
-          <MenuItem id="link" href="https://twitter.com/blockbrowser">
+          <MenuItem id="link" href="https://twitter.com/shibiontoken">
             <MessageCircle size={14} />
             Twitter
           </MenuItem>
-          <MenuItem id="link" href="https://etherscan.io/token/0x226d6d842d49b4d757bef1632053a198d5d9c8aa">
+          <MenuItem id="link" href="https://etherscan.io/address/0x95ad61b0a150d79219dcf64e1e6cc01f0b64c4ce">
             <PieChart size={14} />
             Explorer
           </MenuItem>

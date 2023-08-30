@@ -1,10 +1,10 @@
 import { Contract } from '@ethersproject/contracts'
-import GOVERNANCE_ABI from '@uniswap/governance/build/GovernorAlpha.json'
-import UNI_ABI from '@uniswap/governance/build/Uni.json'
-import STAKING_REWARDS_ABI from '@uniswap/liquidity-staker/build/StakingRewards.json'
-import MERKLE_DISTRIBUTOR_ABI from '@uniswap/merkle-distributor/build/MerkleDistributor.json'
+import { abi as GOVERNANCE_ABI } from '@uniswap/governance/build/GovernorAlpha.json'
+import { abi as UNI_ABI } from '@uniswap/governance/build/Uni.json'
+import { abi as STAKING_REWARDS_ABI } from '@uniswap/liquidity-staker/build/StakingRewards.json'
+import { abi as MERKLE_DISTRIBUTOR_ABI } from '@uniswap/merkle-distributor/build/MerkleDistributor.json'
 import { ChainId, WETH } from '@uniswap/sdk'
-import abi from '@uniswap/v2-core/build/IUniswapV2Pair.json'
+import { abi as IUniswapV2PairABI } from '@uniswap/v2-core/build/IUniswapV2Pair.json'
 import { useMemo } from 'react'
 import { GOVERNANCE_ADDRESS, MERKLE_DISTRIBUTOR_ADDRESS, UNI } from '../constants'
 import ENS_PUBLIC_RESOLVER_ABI from '../constants/abis/ens-public-resolver.json'
@@ -84,7 +84,7 @@ export function useBytes32TokenContract(tokenAddress?: string, withSignerIfPossi
 }
 
 export function usePairContract(pairAddress?: string, withSignerIfPossible?: boolean): Contract | null {
-  return useContract(pairAddress, abi.abi, withSignerIfPossible)
+  return useContract(pairAddress, IUniswapV2PairABI, withSignerIfPossible)
 }
 
 export function useMulticallContract(): Contract | null {
@@ -94,20 +94,20 @@ export function useMulticallContract(): Contract | null {
 
 export function useMerkleDistributorContract(): Contract | null {
   const { chainId } = useActiveWeb3React()
-  return useContract(chainId ? MERKLE_DISTRIBUTOR_ADDRESS[chainId] : undefined, MERKLE_DISTRIBUTOR_ABI.abi, true)
+  return useContract(chainId ? MERKLE_DISTRIBUTOR_ADDRESS[chainId] : undefined, MERKLE_DISTRIBUTOR_ABI, true)
 }
 
 export function useGovernanceContract(): Contract | null {
-  return useContract(GOVERNANCE_ADDRESS, GOVERNANCE_ABI.abi, true)
+  return useContract(GOVERNANCE_ADDRESS, GOVERNANCE_ABI, true)
 }
 
 export function useUniContract(): Contract | null {
   const { chainId } = useActiveWeb3React()
-  return useContract(chainId ? UNI[chainId].address : undefined, UNI_ABI.abi, true)
+  return useContract(chainId ? UNI[chainId].address : undefined, UNI_ABI, true)
 }
 
 export function useStakingContract(stakingAddress?: string, withSignerIfPossible?: boolean): Contract | null {
-  return useContract(stakingAddress, STAKING_REWARDS_ABI.abi, withSignerIfPossible)
+  return useContract(stakingAddress, STAKING_REWARDS_ABI, withSignerIfPossible)
 }
 
 export function useSocksController(): Contract | null {
