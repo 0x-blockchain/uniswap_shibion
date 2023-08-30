@@ -26,7 +26,13 @@ export const _WETH = new Token(
   'Wrapped Ethereum'
 )
 
-export const Block = new Token(ChainId.MAINNET, '0x226d6d842D49b4D757bEf1632053a198D5D9c8aA', 18, 'Block', 'Block')
+export const Shibion = new Token(
+  ChainId.MAINNET,
+  '0x0050dF93449FBD9A3D8e2F2F6134c33afF46E1bA',
+  18,
+  'Shibion',
+  'Shibion'
+)
 
 // Block time here is slightly higher (~1s) than average in order to avoid ongoing proposals past the displayed time
 export const AVERAGE_BLOCK_TIME_IN_SECS = 14
@@ -52,11 +58,7 @@ export const COMMON_CONTRACT_NAMES: { [address: string]: string } = {
 export const MERKLE_DISTRIBUTOR_ADDRESS: { [chainId in ChainId]?: string } = {}
 
 const WETH_ONLY: ChainTokenList = {
-  [ChainId.MAINNET]: [WETH[ChainId.MAINNET]],
-  [ChainId.ROPSTEN]: [],
-  [ChainId.RINKEBY]: [],
-  [ChainId.GÖRLI]: [],
-  [ChainId.KOVAN]: []
+  [ChainId.MAINNET]: [WETH[ChainId.MAINNET]]
 }
 
 // used to construct intermediary pairs for trading

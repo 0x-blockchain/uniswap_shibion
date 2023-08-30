@@ -353,7 +353,7 @@ export default function WalletModal({
           )}
           {walletView !== WALLET_VIEWS.PENDING && (
             <Blurb>
-              <span>New to Block Swap? &nbsp;</span>
+              <span>New to Shibion Swap? &nbsp;</span>
             </Blurb>
           )}
         </ContentWrapper>
