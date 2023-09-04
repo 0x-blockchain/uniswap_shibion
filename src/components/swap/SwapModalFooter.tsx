@@ -1,128 +1,242 @@
-import { Trade, TradeType } from '@uniswap/sdk'
-import React, { useContext, useMemo, useState } from 'react'
-import { Repeat } from 'react-feather'
-import { Text } from 'rebass'
-import { ThemeContext } from 'styled-components'
-import { Field } from '../../state/swap/actions'
-import { TYPE } from '../../theme'
-import {
-  computeSlippageAdjustedAmounts,
-  computeTradePriceBreakdown,
-  formatExecutionPrice,
-  warningSeverity
-} from '../../utils/prices'
-import { ButtonError } from '../Button'
-import { AutoColumn } from '../Column'
-import QuestionHelper from '../QuestionHelper'
-import { AutoRow, RowBetween, RowFixed } from '../Row'
-import FormattedPriceImpact from './FormattedPriceImpact'
-import { StyledBalanceMaxMini, SwapCallbackError } from './styleds'
+import { Plural, t, Trans } from '@lingui/macro'
+import { BrowserEvent, InterfaceElementName, SwapEventName } from '@uniswap/analytics-events'
+import { Percent, TradeType } from '@uniswap/sdk-core'
+import { useWeb3React } from '@web3-react/core'
+import { TraceEvent } from 'analytics'
+import Column from 'components/Column'
+import { MouseoverTooltip, TooltipSize } from 'components/Tooltip'
+import { ZERO_PERCENT } from 'constants/misc'
+import { SwapResult } from 'hooks/useSwapCallback'
+import useTransactionDeadline from 'hooks/useTransactionDeadline'
+import useNativeCurrency from 'lib/hooks/useNativeCurrency'
+import { ReactNode } from 'react'
+import { AlertTriangle } from 'react-feather'
+import { ClassicTrade, InterfaceTrade, RouterPreference } from 'state/routing/types'
+import { getTransactionCount, isClassicTrade } from 'state/routing/utils'
+import { useRouterPreference, useUserSlippageTolerance } from 'state/user/hooks'
+import styled, { DefaultTheme, useTheme } from 'styled-components'
+import { ThemedText } from 'theme'
+import { formatNumber, formatPriceImpact, NumberType } from 'utils/formatNumbers'
+import { formatTransactionAmount, priceToPreciseFloat } from 'utils/formatNumbers'
+import getRoutingDiagramEntries from 'utils/getRoutingDiagramEntries'
+import { formatSwapButtonClickEventProperties } from 'utils/loggingFormatters'
+import { getPriceImpactColor } from 'utils/prices'
+
+import { ButtonError, SmallButtonPrimary } from '../Button'
+import Row, { AutoRow, RowBetween, RowFixed } from '../Row'
+import { GasBreakdownTooltip } from './GasBreakdownTooltip'
+import { SwapCallbackError, SwapShowAcceptChanges } from './styled'
+import { Label } from './SwapModalHeaderAmount'
+
+const DetailsContainer = styled(Column)`
+  padding: 0 8px;
+`
+
+const StyledAlertTriangle = styled(AlertTriangle)`
+  margin-right: 8px;
+  min-width: 24px;
+`
+
+const ConfirmButton = styled(ButtonError)`
+  height: 56px;
+  margin-top: 10px;
+`
+
+const DetailRowValue = styled(ThemedText.BodySmall)<{ warningColor?: keyof DefaultTheme }>`
+  text-align: right;
+  overflow-wrap: break-word;
+  ${({ warningColor, theme }) => warningColor && `color: ${theme[warningColor]};`};
+`
 
 export default function SwapModalFooter({
   trade,
-  onConfirm,
   allowedSlippage,
+  swapResult,
+  onConfirm,
   swapErrorMessage,
-  disabledConfirm
+  disabledConfirm,
+  fiatValueInput,
+  fiatValueOutput,
+  showAcceptChanges,
+  onAcceptChanges,
 }: {
-  trade: Trade
-  allowedSlippage: number
+  trade: InterfaceTrade
+  swapResult?: SwapResult
+  allowedSlippage: Percent
   onConfirm: () => void
-  swapErrorMessage: string | undefined
+  swapErrorMessage?: ReactNode
   disabledConfirm: boolean
+  fiatValueInput: { data?: number; isLoading: boolean }
+  fiatValueOutput: { data?: number; isLoading: boolean }
+  showAcceptChanges: boolean
+  onAcceptChanges: () => void
 }) {
-  const [showInverted, setShowInverted] = useState<boolean>(false)
-  const theme = useContext(ThemeContext)
-  const slippageAdjustedAmounts = useMemo(() => computeSlippageAdjustedAmounts(trade, allowedSlippage), [
-    allowedSlippage,
-    trade
-  ])
-  const { priceImpactWithoutFee, realizedLPFee } = useMemo(() => computeTradePriceBreakdown(trade), [trade])
-  const severity = warningSeverity(priceImpactWithoutFee)
+  const transactionDeadlineSecondsSinceEpoch = useTransactionDeadline()?.toNumber() // in seconds since epoch
+  const isAutoSlippage = useUserSlippageTolerance()[0] === 'auto'
+  const [routerPreference] = useRouterPreference()
+  const routes = isClassicTrade(trade) ? getRoutingDiagramEntries(trade) : undefined
+  const theme = useTheme()
+  const { chainId } = useWeb3React()
+  const nativeCurrency = useNativeCurrency(chainId)
+
+  const label = `${trade.executionPrice.baseCurrency?.symbol} `
+  const labelInverted = `${trade.executionPrice.quoteCurrency?.symbol}`
+  const formattedPrice = formatTransactionAmount(priceToPreciseFloat(trade.executionPrice))
+  const txCount = getTransactionCount(trade)
 
   return (
     <>
-      <AutoColumn gap="0px">
-        <RowBetween align="center">
-          <Text fontWeight={400} fontSize={14} color={theme.text2}>
-            Price
-          </Text>
-          <Text
-            fontWeight={500}
-            fontSize={14}
-            color={theme.text1}
-            style={{
-              justifyContent: 'center',
-              alignItems: 'center',
-              display: 'flex',
-              textAlign: 'right',
-              paddingLeft: '10px'
-            }}
+      <DetailsContainer gap="md">
+        <ThemedText.BodySmall>
+          <Row align="flex-start" justify="space-between" gap="sm">
+            <Label>
+              <Trans>Exchange rate</Trans>
+            </Label>
+            <DetailRowValue>{`1 ${labelInverted} = ${formattedPrice ?? '-'} ${label}`}</DetailRowValue>
+          </Row>
+        </ThemedText.BodySmall>
+        <ThemedText.BodySmall>
+          <Row align="flex-start" justify="space-between" gap="sm">
+            <MouseoverTooltip
+              text={
+                <Trans>
+                  The fee paid to miners who process your transaction. This must be paid in ${nativeCurrency.symbol}.
+                </Trans>
+              }
+            >
+              <Label cursor="help">
+                <Plural value={txCount} one="Network fee" other="Network fees" />
+              </Label>
+            </MouseoverTooltip>
+            <MouseoverTooltip placement="right" size={TooltipSize.Small} text={<GasBreakdownTooltip trade={trade} />}>
+              <DetailRowValue>{formatNumber(trade.totalGasUseEstimateUSD, NumberType.FiatGasPrice)}</DetailRowValue>
+            </MouseoverTooltip>
+          </Row>
+        </ThemedText.BodySmall>
+        {isClassicTrade(trade) && (
+          <>
+            <TokenTaxLineItem trade={trade} type="input" />
+            <TokenTaxLineItem trade={trade} type="output" />
+            <ThemedText.BodySmall>
+              <Row align="flex-start" justify="space-between" gap="sm">
+                <MouseoverTooltip text={<Trans>The impact your trade has on the market price of this pool.</Trans>}>
+                  <Label cursor="help">
+                    <Trans>Price impact</Trans>
+                  </Label>
+                </MouseoverTooltip>
+                <DetailRowValue warningColor={getPriceImpactColor(trade.priceImpact)}>
+                  {trade.priceImpact ? formatPriceImpact(trade.priceImpact) : '-'}
+                </DetailRowValue>
+              </Row>
+            </ThemedText.BodySmall>
+          </>
+        )}
+        <ThemedText.BodySmall>
+          <Row align="flex-start" justify="space-between" gap="sm">
+            <MouseoverTooltip
+              text={
+                trade.tradeType === TradeType.EXACT_INPUT ? (
+                  <Trans>
+                    The minimum amount you are guaranteed to receive. If the price slips any further, your transaction
+                    will revert.
+                  </Trans>
+                ) : (
+                  <Trans>
+                    The maximum amount you are guaranteed to spend. If the price slips any further, your transaction
+                    will revert.
+                  </Trans>
+                )
+              }
+            >
+              <Label cursor="help">
+                {trade.tradeType === TradeType.EXACT_INPUT ? (
+                  <Trans>Minimum received</Trans>
+                ) : (
+                  <Trans>Maximum sent</Trans>
+                )}
+              </Label>
+            </MouseoverTooltip>
+            <DetailRowValue>
+              {trade.tradeType === TradeType.EXACT_INPUT
+                ? `${trade.minimumAmountOut(allowedSlippage).toSignificant(6)} ${trade.outputAmount.currency.symbol}`
+                : `${trade.maximumAmountIn(allowedSlippage).toSignificant(6)} ${trade.inputAmount.currency.symbol}`}
+            </DetailRowValue>
+          </Row>
+        </ThemedText.BodySmall>
+      </DetailsContainer>
+      {showAcceptChanges ? (
+        <SwapShowAcceptChanges data-testid="show-accept-changes">
+          <RowBetween>
+            <RowFixed>
+              <StyledAlertTriangle size={20} />
+              <ThemedText.DeprecatedMain color={theme.accent1}>
+                <Trans>Price updated</Trans>
+              </ThemedText.DeprecatedMain>
+            </RowFixed>
+            <SmallButtonPrimary onClick={onAcceptChanges}>
+              <Trans>Accept</Trans>
+            </SmallButtonPrimary>
+          </RowBetween>
+        </SwapShowAcceptChanges>
+      ) : (
+        <AutoRow>
+          <TraceEvent
+            events={[BrowserEvent.onClick]}
+            element={InterfaceElementName.CONFIRM_SWAP_BUTTON}
+            name={SwapEventName.SWAP_SUBMITTED_BUTTON_CLICKED}
+            properties={formatSwapButtonClickEventProperties({
+              trade,
+              swapResult,
+              allowedSlippage,
+              transactionDeadlineSecondsSinceEpoch,
+              isAutoSlippage,
+              isAutoRouterApi: routerPreference === RouterPreference.API,
+              routes,
+              fiatValueInput: fiatValueInput.data,
+              fiatValueOutput: fiatValueOutput.data,
+            })}
           >
-            {formatExecutionPrice(trade, showInverted)}
-            <StyledBalanceMaxMini onClick={() => setShowInverted(!showInverted)}>
-              <Repeat size={14} />
-            </StyledBalanceMaxMini>
-          </Text>
-        </RowBetween>
+            <ConfirmButton
+              data-testid="confirm-swap-button"
+              onClick={onConfirm}
+              disabled={disabledConfirm}
+              $borderRadius="12px"
+              id={InterfaceElementName.CONFIRM_SWAP_BUTTON}
+            >
+              <ThemedText.HeadlineSmall color="deprecated_accentTextLightPrimary">
+                <Trans>Confirm swap</Trans>
+              </ThemedText.HeadlineSmall>
+            </ConfirmButton>
+          </TraceEvent>
 
-        <RowBetween>
-          <RowFixed>
-            <TYPE.black fontSize={14} fontWeight={400} color={theme.text2}>
-              {trade.tradeType === TradeType.EXACT_INPUT ? 'Minimum received' : 'Maximum sold'}
-            </TYPE.black>
-            <QuestionHelper text="Your transaction will revert if there is a large, unfavorable price movement before it is confirmed." />
-          </RowFixed>
-          <RowFixed>
-            <TYPE.black fontSize={14}>
-              {trade.tradeType === TradeType.EXACT_INPUT
-                ? slippageAdjustedAmounts[Field.OUTPUT]?.toSignificant(4) ?? '-'
-                : slippageAdjustedAmounts[Field.INPUT]?.toSignificant(4) ?? '-'}
-            </TYPE.black>
-            <TYPE.black fontSize={14} marginLeft={'4px'}>
-              {trade.tradeType === TradeType.EXACT_INPUT
-                ? trade.outputAmount.currency.symbol
-                : trade.inputAmount.currency.symbol}
-            </TYPE.black>
-          </RowFixed>
-        </RowBetween>
-        <RowBetween>
-          <RowFixed>
-            <TYPE.black color={theme.text2} fontSize={14} fontWeight={400}>
-              Price Impact
-            </TYPE.black>
-            <QuestionHelper text="The difference between the market price and your price due to trade size." />
-          </RowFixed>
-          <FormattedPriceImpact priceImpact={priceImpactWithoutFee} />
-        </RowBetween>
-        <RowBetween>
-          <RowFixed>
-            <TYPE.black fontSize={14} fontWeight={400} color={theme.text2}>
-              Liquidity Provider Fee
-            </TYPE.black>
-            <QuestionHelper text="A portion of each trade (0.30%) goes to liquidity providers as a protocol incentive." />
-          </RowFixed>
-          <TYPE.black fontSize={14}>
-            {realizedLPFee ? realizedLPFee?.toSignificant(6) + ' ' + trade.inputAmount.currency.symbol : '-'}
-          </TYPE.black>
-        </RowBetween>
-      </AutoColumn>
-
-      <AutoRow>
-        <ButtonError
-          onClick={onConfirm}
-          disabled={disabledConfirm}
-          error={severity > 2}
-          style={{ margin: '10px 0 0 0' }}
-          id="confirm-swap-or-send"
-        >
-          <Text fontSize={20} fontWeight={500}>
-            {severity > 2 ? 'Swap Anyway' : 'Confirm Swap'}
-          </Text>
-        </ButtonError>
-
-        {swapErrorMessage ? <SwapCallbackError error={swapErrorMessage} /> : null}
-      </AutoRow>
+          {swapErrorMessage ? <SwapCallbackError error={swapErrorMessage} /> : null}
+        </AutoRow>
+      )}
     </>
+  )
+}
+
+function TokenTaxLineItem({ trade, type }: { trade: ClassicTrade; type: 'input' | 'output' }) {
+  const [currency, percentage] =
+    type === 'input' ? [trade.inputAmount.currency, trade.inputTax] : [trade.outputAmount.currency, trade.outputTax]
+
+  if (percentage.equalTo(ZERO_PERCENT)) return null
+
+  return (
+    <ThemedText.BodySmall>
+      <Row align="flex-start" justify="space-between" gap="sm">
+        <MouseoverTooltip
+          text={
+            <Trans>
+              Some tokens take a fee when they are bought or sold, which is set by the token issuer. Uniswap does not
+              receive any of these fees.
+            </Trans>
+          }
+        >
+          <Label cursor="help">{t`${currency.symbol} fee`}</Label>
+        </MouseoverTooltip>
+        <DetailRowValue warningColor={getPriceImpactColor(percentage)}>{formatPriceImpact(percentage)}</DetailRowValue>
+      </Row>
+    </ThemedText.BodySmall>
   )
 }

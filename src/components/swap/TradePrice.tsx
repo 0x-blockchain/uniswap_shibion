@@ -1,44 +1,66 @@
-import React from 'react'
-import { Price } from '@uniswap/sdk'
-import { useContext } from 'react'
-import { Repeat } from 'react-feather'
-import { Text } from 'rebass'
-import { ThemeContext } from 'styled-components'
-import { StyledBalanceMaxMini } from './styleds'
+import { Trans } from '@lingui/macro'
+import { Currency, Price } from '@uniswap/sdk-core'
+import { useUSDPrice } from 'hooks/useUSDPrice'
+import tryParseCurrencyAmount from 'lib/utils/tryParseCurrencyAmount'
+import { useCallback, useMemo, useState } from 'react'
+import styled from 'styled-components'
+import { ThemedText } from 'theme'
+import { formatNumber, formatPrice, NumberType } from 'utils/formatNumbers'
 
 interface TradePriceProps {
-  price?: Price
-  showInverted: boolean
-  setShowInverted: (showInverted: boolean) => void
+  price: Price<Currency, Currency>
 }
 
-export default function TradePrice({ price, showInverted, setShowInverted }: TradePriceProps) {
-  const theme = useContext(ThemeContext)
+const StyledPriceContainer = styled.button`
+  background-color: transparent;
+  border: none;
+  cursor: pointer;
+  align-items: center;
+  justify-content: flex-start;
+  padding: 0;
+  grid-template-columns: 1fr auto;
+  grid-gap: 0.25rem;
+  display: flex;
+  flex-direction: row;
+  text-align: left;
+  flex-wrap: wrap;
+  user-select: text;
+`
 
-  const formattedPrice = showInverted ? price?.toSignificant(6) : price?.invert()?.toSignificant(6)
+export default function TradePrice({ price }: TradePriceProps) {
+  const [showInverted, setShowInverted] = useState<boolean>(false)
 
-  const show = Boolean(price?.baseCurrency && price?.quoteCurrency)
-  const label = showInverted
-    ? `${price?.quoteCurrency?.symbol} per ${price?.baseCurrency?.symbol}`
-    : `${price?.baseCurrency?.symbol} per ${price?.quoteCurrency?.symbol}`
+  const { baseCurrency, quoteCurrency } = price
+  const { data: usdPrice } = useUSDPrice(tryParseCurrencyAmount('1', showInverted ? baseCurrency : quoteCurrency))
+
+  const formattedPrice = useMemo(() => {
+    try {
+      return formatPrice(showInverted ? price : price.invert(), NumberType.TokenTx)
+    } catch {
+      return '0'
+    }
+  }, [price, showInverted])
+
+  const label = showInverted ? `${price.quoteCurrency?.symbol}` : `${price.baseCurrency?.symbol} `
+  const labelInverted = showInverted ? `${price.baseCurrency?.symbol} ` : `${price.quoteCurrency?.symbol}`
+  const flipPrice = useCallback(() => setShowInverted(!showInverted), [setShowInverted, showInverted])
+
+  const text = `${'1 ' + labelInverted + ' = ' + formattedPrice ?? '-'} ${label}`
 
   return (
-    <Text
-      fontWeight={500}
-      fontSize={14}
-      color={theme.text2}
-      style={{ justifyContent: 'center', alignItems: 'center', display: 'flex' }}
+    <StyledPriceContainer
+      onClick={(e) => {
+        e.stopPropagation() // dont want this click to affect dropdowns / hovers
+        flipPrice()
+      }}
+      title={text}
     >
-      {show ? (
-        <>
-          {formattedPrice ?? '-'} {label}
-          <StyledBalanceMaxMini onClick={() => setShowInverted(!showInverted)}>
-            <Repeat size={14} />
-          </StyledBalanceMaxMini>
-        </>
-      ) : (
-        '-'
+      <ThemedText.BodySmall>{text}</ThemedText.BodySmall>{' '}
+      {usdPrice && (
+        <ThemedText.BodySmall color="neutral2">
+          <Trans>({formatNumber(usdPrice, NumberType.FiatTokenPrice)})</Trans>
+        </ThemedText.BodySmall>
       )}
-    </Text>
+    </StyledPriceContainer>
   )
 }

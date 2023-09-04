@@ -1,38 +1,101 @@
-import { useCallback, useMemo } from 'react'
-import { useDispatch, useSelector } from 'react-redux'
-import { useActiveWeb3React } from '../../hooks'
-import { AppDispatch, AppState } from '../index'
-import { addPopup, ApplicationModal, PopupContent, removePopup, setOpenModal } from './actions'
+import { MoonpayEventName } from '@uniswap/analytics-events'
+import { sendAnalyticsEvent } from 'analytics'
+import { DEFAULT_TXN_DISMISS_MS } from 'constants/misc'
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useAppDispatch, useAppSelector } from 'state/hooks'
+import { AppState } from 'state/reducer'
 
-export function useBlockNumber(): number | undefined {
-  const { chainId } = useActiveWeb3React()
+import {
+  addPopup,
+  ApplicationModal,
+  PopupContent,
+  removePopup,
+  setFiatOnrampAvailability,
+  setOpenModal,
+} from './reducer'
 
-  return useSelector((state: AppState) => state.application.blockNumber[chainId ?? -1])
-}
-
-export function useModalOpen(modal: ApplicationModal): boolean {
-  const openModal = useSelector((state: AppState) => state.application.openModal)
+export function useModalIsOpen(modal: ApplicationModal): boolean {
+  const openModal = useAppSelector((state: AppState) => state.application.openModal)
   return openModal === modal
 }
 
+/** @ref https://dashboard.moonpay.com/api_reference/client_side_api#ip_addresses */
+interface MoonpayIPAddressesResponse {
+  alpha3?: string
+  isAllowed?: boolean
+  isBuyAllowed?: boolean
+  isSellAllowed?: boolean
+}
+
+async function getMoonpayAvailability(): Promise<boolean> {
+  const moonpayPublishableKey = process.env.REACT_APP_MOONPAY_PUBLISHABLE_KEY
+  if (!moonpayPublishableKey) {
+    throw new Error('Must provide a publishable key for moonpay.')
+  }
+  const moonpayApiURI = process.env.REACT_APP_MOONPAY_API
+  if (!moonpayApiURI) {
+    throw new Error('Must provide an api endpoint for moonpay.')
+  }
+  const res = await fetch(`${moonpayApiURI}/v4/ip_address?apiKey=${moonpayPublishableKey}`)
+  const data = await (res.json() as Promise<MoonpayIPAddressesResponse>)
+  return data.isBuyAllowed ?? false
+}
+
+export function useFiatOnrampAvailability(shouldCheck: boolean, callback?: () => void) {
+  const dispatch = useAppDispatch()
+  const { available, availabilityChecked } = useAppSelector((state: AppState) => state.application.fiatOnramp)
+  const [error, setError] = useState<string | null>(null)
+  const [loading, setLoading] = useState(false)
+
+  useEffect(() => {
+    async function checkAvailability() {
+      setError(null)
+      setLoading(true)
+      try {
+        const result = await getMoonpayAvailability()
+        sendAnalyticsEvent(MoonpayEventName.MOONPAY_GEOCHECK_COMPLETED, { success: result })
+        if (stale) return
+        dispatch(setFiatOnrampAvailability(result))
+        if (result && callback) {
+          callback()
+        }
+      } catch (e) {
+        console.error('Error checking onramp availability', e.toString())
+        if (stale) return
+        setError('Error, try again later.')
+        dispatch(setFiatOnrampAvailability(false))
+      } finally {
+        if (!stale) setLoading(false)
+      }
+    }
+
+    if (!availabilityChecked && shouldCheck) {
+      checkAvailability()
+    }
+
+    let stale = false
+    return () => {
+      stale = true
+    }
+  }, [availabilityChecked, callback, dispatch, shouldCheck])
+
+  return { available, availabilityChecked, loading, error }
+}
+
 export function useToggleModal(modal: ApplicationModal): () => void {
-  const open = useModalOpen(modal)
-  const dispatch = useDispatch<AppDispatch>()
-  return useCallback(() => dispatch(setOpenModal(open ? null : modal)), [dispatch, modal, open])
+  const isOpen = useModalIsOpen(modal)
+  const dispatch = useAppDispatch()
+  return useCallback(() => dispatch(setOpenModal(isOpen ? null : modal)), [dispatch, modal, isOpen])
 }
 
-export function useOpenModal(modal: ApplicationModal): () => void {
-  const dispatch = useDispatch<AppDispatch>()
-  return useCallback(() => dispatch(setOpenModal(modal)), [dispatch, modal])
-}
-
-export function useCloseModals(): () => void {
-  const dispatch = useDispatch<AppDispatch>()
+export function useCloseModal(): () => void {
+  const dispatch = useAppDispatch()
   return useCallback(() => dispatch(setOpenModal(null)), [dispatch])
 }
 
-export function useWalletModalToggle(): () => void {
-  return useToggleModal(ApplicationModal.WALLET)
+export function useOpenModal(modal: ApplicationModal): () => void {
+  const dispatch = useAppDispatch()
+  return useCallback(() => dispatch(setOpenModal(modal)), [dispatch, modal])
 }
 
 export function useToggleSettingsMenu(): () => void {
@@ -40,7 +103,7 @@ export function useToggleSettingsMenu(): () => void {
 }
 
 export function useShowClaimPopup(): boolean {
-  return useModalOpen(ApplicationModal.CLAIM_POPUP)
+  return useModalIsOpen(ApplicationModal.CLAIM_POPUP)
 }
 
 export function useToggleShowClaimPopup(): () => void {
@@ -59,13 +122,29 @@ export function useToggleVoteModal(): () => void {
   return useToggleModal(ApplicationModal.VOTE)
 }
 
+export function useToggleQueueModal(): () => void {
+  return useToggleModal(ApplicationModal.QUEUE)
+}
+
+export function useToggleExecuteModal(): () => void {
+  return useToggleModal(ApplicationModal.EXECUTE)
+}
+
+export function useTogglePrivacyPolicy(): () => void {
+  return useToggleModal(ApplicationModal.PRIVACY_POLICY)
+}
+
+export function useToggleFeatureFlags(): () => void {
+  return useToggleModal(ApplicationModal.FEATURE_FLAGS)
+}
+
 // returns a function that allows adding a popup
-export function useAddPopup(): (content: PopupContent, key?: string) => void {
-  const dispatch = useDispatch()
+export function useAddPopup(): (content: PopupContent, key?: string, removeAfterMs?: number) => void {
+  const dispatch = useAppDispatch()
 
   return useCallback(
-    (content: PopupContent, key?: string) => {
-      dispatch(addPopup({ content, key }))
+    (content: PopupContent, key?: string, removeAfterMs?: number) => {
+      dispatch(addPopup({ content, key, removeAfterMs: removeAfterMs ?? DEFAULT_TXN_DISMISS_MS }))
     },
     [dispatch]
   )
@@ -73,7 +152,7 @@ export function useAddPopup(): (content: PopupContent, key?: string) => void {
 
 // returns a function that allows removing a popup via its key
 export function useRemovePopup(): (key: string) => void {
-  const dispatch = useDispatch()
+  const dispatch = useAppDispatch()
   return useCallback(
     (key: string) => {
       dispatch(removePopup({ key }))
@@ -84,6 +163,6 @@ export function useRemovePopup(): (key: string) => void {
 
 // get the list of active popups
 export function useActivePopups(): AppState['application']['popupList'] {
-  const list = useSelector((state: AppState) => state.application.popupList)
-  return useMemo(() => list.filter(item => item.show), [list])
+  const list = useAppSelector((state: AppState) => state.application.popupList)
+  return useMemo(() => list.filter((item) => item.show), [list])
 }

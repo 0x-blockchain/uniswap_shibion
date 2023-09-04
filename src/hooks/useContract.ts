@@ -1,125 +1,171 @@
 import { Contract } from '@ethersproject/contracts'
-import { abi as GOVERNANCE_ABI } from '@uniswap/governance/build/GovernorAlpha.json'
-import { abi as UNI_ABI } from '@uniswap/governance/build/Uni.json'
-import { abi as STAKING_REWARDS_ABI } from '@uniswap/liquidity-staker/build/StakingRewards.json'
-import { abi as MERKLE_DISTRIBUTOR_ABI } from '@uniswap/merkle-distributor/build/MerkleDistributor.json'
-import { ChainId, WETH } from '@uniswap/sdk'
-import { abi as IUniswapV2PairABI } from '@uniswap/v2-core/build/IUniswapV2Pair.json'
-import { useMemo } from 'react'
-import { GOVERNANCE_ADDRESS, MERKLE_DISTRIBUTOR_ADDRESS, UNI } from '../constants'
-import ENS_PUBLIC_RESOLVER_ABI from '../constants/abis/ens-public-resolver.json'
-import ENS_ABI from '../constants/abis/ens-registrar.json'
-import NUSDC_ABI from '../constants/abis/nUSD.json'
-import { ERC20_BYTES32_ABI } from '../constants/abis/erc20'
-import ERC20_ABI from '../constants/abis/erc20.json'
-import { MIGRATOR_ABI, MIGRATOR_ADDRESS } from '../constants/abis/migrator'
-import UNISOCKS_ABI from '../constants/abis/unisocks.json'
-import WETH_ABI from '../constants/abis/weth.json'
-import { MULTICALL_ABI, MULTICALL_NETWORKS } from '../constants/multicall'
-import { V1_EXCHANGE_ABI, V1_FACTORY_ABI, V1_FACTORY_ADDRESSES } from '../constants/v1'
-import { getContract } from '../utils'
-import { useActiveWeb3React } from './index'
-import { ARGENT_WALLET_DETECTOR_ABI } from '../constants/abis/argent-wallet-detector'
+import { InterfaceEventName } from '@uniswap/analytics-events'
+import {
+  ARGENT_WALLET_DETECTOR_ADDRESS,
+  ChainId,
+  ENS_REGISTRAR_ADDRESSES,
+  MULTICALL_ADDRESSES,
+  NONFUNGIBLE_POSITION_MANAGER_ADDRESSES,
+  TICK_LENS_ADDRESSES,
+  V2_ROUTER_ADDRESS,
+  V3_MIGRATOR_ADDRESSES,
+} from '@uniswap/sdk-core'
+import IUniswapV2PairJson from '@uniswap/v2-core/build/IUniswapV2Pair.json'
+import IUniswapV2Router02Json from '@uniswap/v2-periphery/build/IUniswapV2Router02.json'
+import TickLensJson from '@uniswap/v3-periphery/artifacts/contracts/lens/TickLens.sol/TickLens.json'
+import UniswapInterfaceMulticallJson from '@uniswap/v3-periphery/artifacts/contracts/lens/UniswapInterfaceMulticall.sol/UniswapInterfaceMulticall.json'
+import NonfungiblePositionManagerJson from '@uniswap/v3-periphery/artifacts/contracts/NonfungiblePositionManager.sol/NonfungiblePositionManager.json'
+import V3MigratorJson from '@uniswap/v3-periphery/artifacts/contracts/V3Migrator.sol/V3Migrator.json'
+import { useWeb3React } from '@web3-react/core'
+import ARGENT_WALLET_DETECTOR_ABI from 'abis/argent-wallet-detector.json'
+import EIP_2612 from 'abis/eip_2612.json'
+import ENS_PUBLIC_RESOLVER_ABI from 'abis/ens-public-resolver.json'
+import ENS_ABI from 'abis/ens-registrar.json'
+import ERC20_ABI from 'abis/erc20.json'
+import ERC20_BYTES32_ABI from 'abis/erc20_bytes32.json'
+import ERC721_ABI from 'abis/erc721.json'
+import ERC1155_ABI from 'abis/erc1155.json'
+import { ArgentWalletDetector, EnsPublicResolver, EnsRegistrar, Erc20, Erc721, Erc1155, Weth } from 'abis/types'
+import WETH_ABI from 'abis/weth.json'
+import { sendAnalyticsEvent } from 'analytics'
+import { RPC_PROVIDERS } from 'constants/providers'
+import { WRAPPED_NATIVE_CURRENCY } from 'constants/tokens'
+import { useEffect, useMemo } from 'react'
+import { NonfungiblePositionManager, TickLens, UniswapInterfaceMulticall } from 'types/v3'
+import { V3Migrator } from 'types/v3/V3Migrator'
+import { getContract } from 'utils'
+
+const { abi: IUniswapV2PairABI } = IUniswapV2PairJson
+const { abi: IUniswapV2Router02ABI } = IUniswapV2Router02Json
+const { abi: TickLensABI } = TickLensJson
+const { abi: MulticallABI } = UniswapInterfaceMulticallJson
+const { abi: NFTPositionManagerABI } = NonfungiblePositionManagerJson
+const { abi: V2MigratorABI } = V3MigratorJson
 
 // returns null on errors
-function useContract(address: string | undefined, ABI: any, withSignerIfPossible = true): Contract | null {
-  const { library, account } = useActiveWeb3React()
+export function useContract<T extends Contract = Contract>(
+  addressOrAddressMap: string | { [chainId: number]: string } | undefined,
+  ABI: any,
+  withSignerIfPossible = true
+): T | null {
+  const { provider, account, chainId } = useWeb3React()
 
   return useMemo(() => {
-    if (!address || !ABI || !library) return null
+    if (!addressOrAddressMap || !ABI || !provider || !chainId) return null
+    let address: string | undefined
+    if (typeof addressOrAddressMap === 'string') address = addressOrAddressMap
+    else address = addressOrAddressMap[chainId]
+    if (!address) return null
     try {
-      return getContract(address, ABI, library, withSignerIfPossible && account ? account : undefined)
+      return getContract(address, ABI, provider, withSignerIfPossible && account ? account : undefined)
     } catch (error) {
       console.error('Failed to get contract', error)
       return null
     }
-  }, [address, ABI, library, withSignerIfPossible, account])
+  }, [addressOrAddressMap, ABI, provider, chainId, withSignerIfPossible, account]) as T
 }
 
-export function useV1FactoryContract(): Contract | null {
-  const { chainId } = useActiveWeb3React()
-  return useContract(chainId && V1_FACTORY_ADDRESSES[chainId], V1_FACTORY_ABI, false)
-}
-
-export function useV2MigratorContract(): Contract | null {
-  return useContract(MIGRATOR_ADDRESS, MIGRATOR_ABI, true)
-}
-
-export function useV1ExchangeContract(address?: string, withSignerIfPossible?: boolean): Contract | null {
-  return useContract(address, V1_EXCHANGE_ABI, withSignerIfPossible)
-}
-
-export function useTokenContract(tokenAddress?: string, withSignerIfPossible?: boolean): Contract | null {
-  return useContract(tokenAddress, ERC20_ABI, withSignerIfPossible)
-}
-
-export function useWETHContract(withSignerIfPossible?: boolean): Contract | null {
-  const { chainId } = useActiveWeb3React()
-  return useContract(chainId ? WETH[chainId].address : undefined, WETH_ABI, withSignerIfPossible)
-}
-
-export function useArgentWalletDetectorContract(): Contract | null {
-  return useContract(undefined, ARGENT_WALLET_DETECTOR_ABI, false)
-}
-
-export function useENSRegistrarContract(withSignerIfPossible?: boolean): Contract | null {
-  const { chainId } = useActiveWeb3React()
-  let address: string | undefined
-  if (chainId) {
-    switch (chainId) {
-      case ChainId.MAINNET:
-        // address = '0x00000000000C2E074eC69A0dFb2997BA6C7d2e1e'
-        break
+function useMainnetContract<T extends Contract = Contract>(address: string | undefined, ABI: any): T | null {
+  const { chainId } = useWeb3React()
+  const isMainnet = chainId === ChainId.MAINNET
+  const contract = useContract(isMainnet ? address : undefined, ABI, false)
+  return useMemo(() => {
+    if (isMainnet) return contract
+    if (!address) return null
+    const provider = RPC_PROVIDERS[ChainId.MAINNET]
+    try {
+      return getContract(address, ABI, provider)
+    } catch (error) {
+      console.error('Failed to get mainnet contract', error)
+      return null
     }
-  }
-  return useContract(address, ENS_ABI, withSignerIfPossible)
+  }, [address, ABI, contract, isMainnet]) as T
 }
 
-export function useENSResolverContract(address: string | undefined, withSignerIfPossible?: boolean): Contract | null {
-  return useContract(address, ENS_PUBLIC_RESOLVER_ABI, withSignerIfPossible)
+export function useV2MigratorContract() {
+  return useContract<V3Migrator>(V3_MIGRATOR_ADDRESSES, V2MigratorABI, true)
+}
+
+export function useTokenContract(tokenAddress?: string, withSignerIfPossible?: boolean) {
+  return useContract<Erc20>(tokenAddress, ERC20_ABI, withSignerIfPossible)
+}
+
+export function useWETHContract(withSignerIfPossible?: boolean) {
+  const { chainId } = useWeb3React()
+  return useContract<Weth>(
+    chainId ? WRAPPED_NATIVE_CURRENCY[chainId]?.address : undefined,
+    WETH_ABI,
+    withSignerIfPossible
+  )
+}
+
+export function useERC721Contract(nftAddress?: string) {
+  return useContract<Erc721>(nftAddress, ERC721_ABI, false)
+}
+
+export function useERC1155Contract(nftAddress?: string) {
+  return useContract<Erc1155>(nftAddress, ERC1155_ABI, false)
+}
+
+export function useArgentWalletDetectorContract() {
+  return useContract<ArgentWalletDetector>(ARGENT_WALLET_DETECTOR_ADDRESS, ARGENT_WALLET_DETECTOR_ABI, false)
+}
+
+export function useENSRegistrarContract() {
+  return useMainnetContract<EnsRegistrar>(ENS_REGISTRAR_ADDRESSES[ChainId.MAINNET], ENS_ABI)
+}
+
+export function useENSResolverContract(address: string | undefined) {
+  return useMainnetContract<EnsPublicResolver>(address, ENS_PUBLIC_RESOLVER_ABI)
 }
 
 export function useBytes32TokenContract(tokenAddress?: string, withSignerIfPossible?: boolean): Contract | null {
   return useContract(tokenAddress, ERC20_BYTES32_ABI, withSignerIfPossible)
 }
 
+export function useEIP2612Contract(tokenAddress?: string): Contract | null {
+  return useContract(tokenAddress, EIP_2612, false)
+}
+
 export function usePairContract(pairAddress?: string, withSignerIfPossible?: boolean): Contract | null {
   return useContract(pairAddress, IUniswapV2PairABI, withSignerIfPossible)
 }
 
-export function useMulticallContract(): Contract | null {
-  const { chainId } = useActiveWeb3React()
-  return useContract(chainId && MULTICALL_NETWORKS[chainId], MULTICALL_ABI, false)
+export function useV2RouterContract(): Contract | null {
+  return useContract(V2_ROUTER_ADDRESS, IUniswapV2Router02ABI, true)
 }
 
-export function useMerkleDistributorContract(): Contract | null {
-  const { chainId } = useActiveWeb3React()
-  return useContract(chainId ? MERKLE_DISTRIBUTOR_ADDRESS[chainId] : undefined, MERKLE_DISTRIBUTOR_ABI, true)
+export function useInterfaceMulticall() {
+  return useContract<UniswapInterfaceMulticall>(MULTICALL_ADDRESSES, MulticallABI, false) as UniswapInterfaceMulticall
 }
 
-export function useGovernanceContract(): Contract | null {
-  return useContract(GOVERNANCE_ADDRESS, GOVERNANCE_ABI, true)
+export function useMainnetInterfaceMulticall() {
+  return useMainnetContract<UniswapInterfaceMulticall>(
+    MULTICALL_ADDRESSES[ChainId.MAINNET],
+    MulticallABI
+  ) as UniswapInterfaceMulticall
 }
 
-export function useUniContract(): Contract | null {
-  const { chainId } = useActiveWeb3React()
-  return useContract(chainId ? UNI[chainId].address : undefined, UNI_ABI, true)
-}
-
-export function useStakingContract(stakingAddress?: string, withSignerIfPossible?: boolean): Contract | null {
-  return useContract(stakingAddress, STAKING_REWARDS_ABI, withSignerIfPossible)
-}
-
-export function useSocksController(): Contract | null {
-  // const { chainId } = useActiveWeb3React()
-  return useContract(
-    // chainId === ChainId.MAINNET ? '0x65770b5283117639760beA3F867b69b3697a91dd' :
-    undefined,
-    UNISOCKS_ABI,
-    false
+export function useV3NFTPositionManagerContract(withSignerIfPossible?: boolean): NonfungiblePositionManager | null {
+  const { account } = useWeb3React()
+  const contract = useContract<NonfungiblePositionManager>(
+    NONFUNGIBLE_POSITION_MANAGER_ADDRESSES,
+    NFTPositionManagerABI,
+    withSignerIfPossible
   )
+  useEffect(() => {
+    if (contract && account) {
+      sendAnalyticsEvent(InterfaceEventName.WALLET_PROVIDER_USED, {
+        source: 'useV3NFTPositionManagerContract',
+        contract,
+      })
+    }
+  }, [account, contract])
+  return contract
 }
 
-export function useWrappedTokenContract(contractAddress: string | undefined): Contract | null {
-  return useContract(contractAddress, NUSDC_ABI)
+export function useTickLens(): TickLens | null {
+  const { chainId } = useWeb3React()
+  const address = chainId ? TICK_LENS_ADDRESSES[chainId] : undefined
+  return useContract(address, TickLensABI) as TickLens | null
 }

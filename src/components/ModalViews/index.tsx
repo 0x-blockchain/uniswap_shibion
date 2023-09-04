@@ -1,15 +1,14 @@
-import React, { useContext } from 'react'
-import { useActiveWeb3React } from '../../hooks'
-
-import { AutoColumn, ColumnCenter } from '../Column'
-import styled, { ThemeContext } from 'styled-components'
-import { RowBetween } from '../Row'
-import { TYPE, CloseIcon, CustomLightSpinner } from '../../theme'
+import { Trans } from '@lingui/macro'
+import { useWeb3React } from '@web3-react/core'
 import { ArrowUpCircle } from 'react-feather'
+import styled, { useTheme } from 'styled-components'
 
 import Circle from '../../assets/images/blue-loader.svg'
-import { getEtherscanLink } from '../../utils'
+import { CloseIcon, CustomLightSpinner, ThemedText } from '../../theme'
 import { ExternalLink } from '../../theme/components'
+import { ExplorerDataType, getExplorerLink } from '../../utils/getExplorerLink'
+import { AutoColumn, ColumnCenter } from '../Column'
+import { RowBetween } from '../Row'
 
 const ConfirmOrLoadingWrapper = styled.div`
   width: 100%;
@@ -28,27 +27,21 @@ export function LoadingView({ children, onDismiss }: { children: any; onDismiss:
         <CloseIcon onClick={onDismiss} />
       </RowBetween>
       <ConfirmedIcon>
-        <CustomLightSpinner src={Circle} alt="loader" size={'90px'} />
+        <CustomLightSpinner src={Circle} alt="loader" size="90px" />
       </ConfirmedIcon>
-      <AutoColumn gap="100px" justify={'center'}>
+      <AutoColumn gap="100px" justify="center">
         {children}
-        <TYPE.subHeader>Confirm this transaction in your wallet</TYPE.subHeader>
+        <ThemedText.DeprecatedSubHeader>
+          <Trans>Confirm this transaction in your wallet</Trans>
+        </ThemedText.DeprecatedSubHeader>
       </AutoColumn>
     </ConfirmOrLoadingWrapper>
   )
 }
 
-export function SubmittedView({
-  children,
-  onDismiss,
-  hash
-}: {
-  children: any
-  onDismiss: () => void
-  hash: string | undefined
-}) {
-  const theme = useContext(ThemeContext)
-  const { chainId } = useActiveWeb3React()
+export function SubmittedView({ children, onDismiss, hash }: { children: any; onDismiss: () => void; hash?: string }) {
+  const theme = useTheme()
+  const { chainId } = useWeb3React()
 
   return (
     <ConfirmOrLoadingWrapper>
@@ -57,13 +50,18 @@ export function SubmittedView({
         <CloseIcon onClick={onDismiss} />
       </RowBetween>
       <ConfirmedIcon>
-        <ArrowUpCircle strokeWidth={0.5} size={90} color={theme.primary1} />
+        <ArrowUpCircle strokeWidth={0.5} size={90} color={theme.accent1} />
       </ConfirmedIcon>
-      <AutoColumn gap="100px" justify={'center'}>
+      <AutoColumn gap="100px" justify="center">
         {children}
         {chainId && hash && (
-          <ExternalLink href={getEtherscanLink(chainId, hash, 'transaction')} style={{ marginLeft: '4px' }}>
-            <TYPE.subHeader>View transaction on Etherscan</TYPE.subHeader>
+          <ExternalLink
+            href={getExplorerLink(chainId, hash, ExplorerDataType.TRANSACTION)}
+            style={{ marginLeft: '4px' }}
+          >
+            <ThemedText.DeprecatedSubHeader>
+              <Trans>View transaction on Explorer</Trans>
+            </ThemedText.DeprecatedSubHeader>
           </ExternalLink>
         )}
       </AutoColumn>

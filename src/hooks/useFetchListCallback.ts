@@ -1,55 +1,36 @@
 import { nanoid } from '@reduxjs/toolkit'
-import { ChainId } from '@uniswap/sdk'
+import { ChainId } from '@uniswap/sdk-core'
 import { TokenList } from '@uniswap/token-lists'
+import { RPC_PROVIDERS } from 'constants/providers'
+import getTokenList from 'lib/hooks/useTokenList/fetchTokenList'
+import resolveENSContentHash from 'lib/utils/resolveENSContentHash'
 import { useCallback } from 'react'
-import { useDispatch } from 'react-redux'
-import { getNetworkLibrary, NETWORK_CHAIN_ID } from '../connectors'
-import { AppDispatch } from '../state'
+import { useAppDispatch } from 'state/hooks'
+
 import { fetchTokenList } from '../state/lists/actions'
-import getTokenList from '../utils/getTokenList'
-import resolveENSContentHash from '../utils/resolveENSContentHash'
-import { useActiveWeb3React } from './index'
 
-export function useFetchListCallback(): (listUrl: string) => Promise<TokenList> {
-  const { chainId, library } = useActiveWeb3React()
-  const dispatch = useDispatch<AppDispatch>()
-
-  const ensResolver = useCallback(
-    (ensName: string) => {
-      if (!library || chainId !== ChainId.MAINNET) {
-        if (NETWORK_CHAIN_ID === ChainId.MAINNET) {
-          const networkLibrary = getNetworkLibrary()
-          if (networkLibrary) {
-            return resolveENSContentHash(ensName, networkLibrary)
-          }
-        }
-        throw new Error('Could not construct mainnet ENS resolver')
-      }
-      // return resolveENSContentHash(ensName, library)
-      return new Promise<string>(resolve => resolve(''))
-    },
-    [chainId, library]
-  )
+export function useFetchListCallback(): (listUrl: string, skipValidation?: boolean) => Promise<TokenList> {
+  const dispatch = useAppDispatch()
 
   return useCallback(
-    async (listUrl: string) => {
+    async (listUrl: string, skipValidation?: boolean) => {
       const requestId = nanoid()
       dispatch(fetchTokenList.pending({ requestId, url: listUrl }))
-      // if (tokens) {
-      //   dispatch(fetchTokenList.fulfilled({ url: listUrl, tokenList: tokens, requestId }))
-      //   return tokens
-      // }
-      return getTokenList(listUrl, ensResolver)
-        .then(tokenList => {
+      return getTokenList(
+        listUrl,
+        (ensName: string) => resolveENSContentHash(ensName, RPC_PROVIDERS[ChainId.MAINNET]),
+        skipValidation
+      )
+        .then((tokenList) => {
           dispatch(fetchTokenList.fulfilled({ url: listUrl, tokenList, requestId }))
           return tokenList
         })
-        .catch(error => {
+        .catch((error) => {
           console.debug(`Failed to get list at url ${listUrl}`, error)
           dispatch(fetchTokenList.rejected({ url: listUrl, requestId, errorMessage: error.message }))
           throw error
         })
     },
-    [dispatch, ensResolver]
+    [dispatch]
   )
 }

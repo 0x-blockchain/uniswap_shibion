@@ -1,114 +1,83 @@
-import { ChainId, Token } from '@uniswap/sdk'
-import { Tags, TokenInfo, TokenList } from '@uniswap/token-lists'
+import { TokenAddressMap, tokensToChainTokenMap } from 'lib/hooks/useTokenList/utils'
 import { useMemo } from 'react'
-import { useSelector } from 'react-redux'
-import { AppState } from '../index'
+import { useAppSelector } from 'state/hooks'
+import { AppState } from 'state/reducer'
+import sortByListPriority from 'utils/listSort'
 
-type TagDetails = Tags[keyof Tags]
-export interface TagInfo extends TagDetails {
-  id: string
+import BROKEN_LIST from '../../constants/tokenLists/broken.tokenlist.json'
+import { DEFAULT_ACTIVE_LIST_URLS, UNSUPPORTED_LIST_URLS } from './../../constants/lists'
+
+type Mutable<T> = {
+  -readonly [P in keyof T]: Mutable<T[P]>
+}
+
+export function useAllLists(): AppState['lists']['byUrl'] {
+  return useAppSelector((state) => state.lists.byUrl)
 }
 
 /**
- * Token instances created from token info.
+ * Combine the tokens in map2 with the tokens on map1, where tokens on map1 take precedence
+ * @param map1 the base token map
+ * @param map2 the map of additioanl tokens to add to the base map
  */
-export class WrappedTokenInfo extends Token {
-  public readonly tokenInfo: TokenInfo
-  public readonly tags: TagInfo[]
-  constructor(tokenInfo: TokenInfo, tags: TagInfo[]) {
-    super(tokenInfo.chainId, tokenInfo.address, tokenInfo.decimals, tokenInfo.symbol, tokenInfo.name)
-    this.tokenInfo = tokenInfo
-    this.tags = tags
-  }
-  public get logoURI(): string | undefined {
-    return this.tokenInfo.logoURI
-  }
-}
+function combineMaps(map1: TokenAddressMap, map2: TokenAddressMap): TokenAddressMap {
+  const chainIds = Object.keys(
+    Object.keys(map1)
+      .concat(Object.keys(map2))
+      .reduce<{ [chainId: string]: true }>((memo, value) => {
+        memo[value] = true
+        return memo
+      }, {})
+  ).map((id) => parseInt(id))
 
-export type TokenAddressMap = Readonly<{ [chainId in ChainId]: Readonly<{ [tokenAddress: string]: WrappedTokenInfo }> }>
-
-/**
- * An empty result, useful as a default.
- */
-const EMPTY_LIST: TokenAddressMap = {
-  [ChainId.MAINNET]: {}
-}
-
-const listCache: WeakMap<TokenList, TokenAddressMap> | null =
-  typeof WeakMap !== 'undefined' ? new WeakMap<TokenList, TokenAddressMap>() : null
-
-export function listToTokenMap(list: TokenList): TokenAddressMap {
-  const result = listCache?.get(list)
-  if (result) return result
-
-  const map = list.tokens.reduce<TokenAddressMap>(
-    (tokenMap, tokenInfo) => {
-      const tags: TagInfo[] =
-        tokenInfo.tags
-          ?.map(tagId => {
-            if (!list.tags?.[tagId]) return undefined
-            return { ...list.tags[tagId], id: tagId }
-          })
-          ?.filter((x): x is TagInfo => Boolean(x)) ?? []
-      const token = new WrappedTokenInfo(tokenInfo, tags)
-      if (tokenMap[token.chainId][token.address] !== undefined) throw Error('Duplicate tokens.')
-      return {
-        ...tokenMap,
-        [token.chainId]: {
-          ...tokenMap[token.chainId],
-          [token.address]: token
-        }
-      }
-    },
-    { ...EMPTY_LIST }
-  )
-  listCache?.set(list, map)
-  return map
-}
-
-export function useTokenList(url: string | undefined): TokenAddressMap {
-  const lists = useSelector<AppState, AppState['lists']['byUrl']>(state => state.lists.byUrl)
-  return useMemo(() => {
-    if (!url) return EMPTY_LIST
-    const current = lists[url]?.current
-    if (!current) return EMPTY_LIST
-    try {
-      return listToTokenMap(current)
-    } catch (error) {
-      console.error('Could not show token list due to error', error)
-      return EMPTY_LIST
+  return chainIds.reduce<Mutable<TokenAddressMap>>((memo, chainId) => {
+    memo[chainId] = {
+      ...map2[chainId],
+      // map1 takes precedence
+      ...map1[chainId],
     }
-  }, [lists, url])
+    return memo
+  }, {}) as TokenAddressMap
 }
 
-export function useSelectedListUrl(): string | undefined {
-  return useSelector<AppState, AppState['lists']['selectedListUrl']>(state => state.lists.selectedListUrl)
+// merge tokens contained within lists from urls
+export function useCombinedTokenMapFromUrls(urls: string[] | undefined): TokenAddressMap {
+  const lists = useAllLists()
+  return useMemo(() => {
+    if (!urls) return {}
+    return (
+      urls
+        .slice()
+        // sort by priority so top priority goes last
+        .sort(sortByListPriority)
+        .reduce((allTokens, currentUrl) => {
+          const current = lists[currentUrl]?.current
+          if (!current) return allTokens
+          try {
+            return combineMaps(allTokens, tokensToChainTokenMap(current))
+          } catch (error) {
+            console.error('Could not show token list due to error', error)
+            return allTokens
+          }
+        }, {})
+    )
+  }, [lists, urls])
 }
 
-export function useSelectedTokenList(): TokenAddressMap {
-  return useTokenList(useSelectedListUrl())
+// get all the tokens from active lists, combine with local default tokens
+export function useCombinedActiveList(): TokenAddressMap {
+  const activeTokens = useCombinedTokenMapFromUrls(DEFAULT_ACTIVE_LIST_URLS)
+  return activeTokens
 }
 
-export function useSelectedListInfo(): { current: TokenList | null; pending: TokenList | null; loading: boolean } {
-  const selectedUrl = useSelectedListUrl()
-  const listsByUrl = useSelector<AppState, AppState['lists']['byUrl']>(state => state.lists.byUrl)
-  const list = selectedUrl ? listsByUrl[selectedUrl] : undefined
-  return {
-    current: list?.current ?? null,
-    pending: list?.pendingUpdate ?? null,
-    loading: list?.loadingRequestId !== null
-  }
-}
+// list of tokens not supported on interface for various reasons, used to show warnings and prevent swaps and adds
+export function useUnsupportedTokenList(): TokenAddressMap {
+  // get hard-coded broken tokens
+  const brokenListMap = useMemo(() => tokensToChainTokenMap(BROKEN_LIST), [])
 
-// returns all downloaded current lists
-export function useAllLists(): TokenList[] {
-  const lists = useSelector<AppState, AppState['lists']['byUrl']>(state => state.lists.byUrl)
+  // get dynamic list of unsupported tokens
+  const loadedUnsupportedListMap = useCombinedTokenMapFromUrls(UNSUPPORTED_LIST_URLS)
 
-  return useMemo(
-    () =>
-      Object.keys(lists)
-        .map(url => lists[url].current)
-        .filter((l): l is TokenList => Boolean(l)),
-    [lists]
-  )
+  // format into one token address map
+  return useMemo(() => combineMaps(brokenListMap, loadedUnsupportedListMap), [brokenListMap, loadedUnsupportedListMap])
 }

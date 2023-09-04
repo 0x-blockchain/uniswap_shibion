@@ -1,20 +1,22 @@
-import React, { useState } from 'react'
-
-import Modal from '../Modal'
-import { AutoColumn } from '../Column'
-import styled from 'styled-components'
-import { RowBetween } from '../Row'
-import { TYPE } from '../../theme'
+import { isAddress } from '@ethersproject/address'
+import { Trans } from '@lingui/macro'
+import { useWeb3React } from '@web3-react/core'
+import { ReactNode, useState } from 'react'
 import { X } from 'react-feather'
-import { ButtonPrimary } from '../Button'
-import { useActiveWeb3React } from '../../hooks'
-import AddressInputPanel from '../AddressInputPanel'
-import { isAddress } from 'ethers/lib/utils'
+import styled from 'styled-components'
+import { formatCurrencyAmount } from 'utils/formatCurrencyAmount'
+
+import { UNI } from '../../constants/tokens'
 import useENS from '../../hooks/useENS'
+import { useTokenBalance } from '../../state/connection/hooks'
 import { useDelegateCallback } from '../../state/governance/hooks'
-import { useTokenBalance } from '../../state/wallet/hooks'
-import { UNI } from '../../constants'
+import { ThemedText } from '../../theme'
+import AddressInputPanel from '../AddressInputPanel'
+import { ButtonPrimary } from '../Button'
+import { AutoColumn } from '../Column'
+import Modal from '../Modal'
 import { LoadingView, SubmittedView } from '../ModalViews'
+import { RowBetween } from '../Row'
 
 const ContentWrapper = styled(AutoColumn)`
   width: 100%;
@@ -36,11 +38,11 @@ const TextButton = styled.div`
 interface VoteModalProps {
   isOpen: boolean
   onDismiss: () => void
-  title: string
+  title: ReactNode
 }
 
 export default function DelegateModal({ isOpen, onDismiss, title }: VoteModalProps) {
-  const { account, chainId } = useActiveWeb3React()
+  const { account, chainId } = useWeb3React()
 
   // state for delegate input
   const [usingDelegate, setUsingDelegate] = useState(false)
@@ -64,7 +66,7 @@ export default function DelegateModal({ isOpen, onDismiss, title }: VoteModalPro
   const [attempting, setAttempting] = useState(false)
 
   // wrapper to reset state on modal close
-  function wrappedOndismiss() {
+  function wrappedOnDismiss() {
     setHash(undefined)
     setAttempting(false)
     onDismiss()
@@ -77,7 +79,7 @@ export default function DelegateModal({ isOpen, onDismiss, title }: VoteModalPro
     if (!delegateCallback) return
 
     // try delegation and store hash
-    const hash = await delegateCallback(parsedAddress ?? undefined)?.catch(error => {
+    const hash = await delegateCallback(parsedAddress ?? undefined)?.catch((error) => {
       setAttempting(false)
       console.log(error)
     })
@@ -88,43 +90,51 @@ export default function DelegateModal({ isOpen, onDismiss, title }: VoteModalPro
   }
 
   return (
-    <Modal isOpen={isOpen} onDismiss={wrappedOndismiss} maxHeight={90}>
+    <Modal isOpen={isOpen} onDismiss={wrappedOnDismiss} maxHeight={90}>
       {!attempting && !hash && (
         <ContentWrapper gap="lg">
           <AutoColumn gap="lg" justify="center">
             <RowBetween>
-              <TYPE.mediumHeader fontWeight={500}>{title}</TYPE.mediumHeader>
-              <StyledClosed stroke="black" onClick={wrappedOndismiss} />
+              <ThemedText.DeprecatedMediumHeader fontWeight={535}>{title}</ThemedText.DeprecatedMediumHeader>
+              <StyledClosed stroke="black" onClick={wrappedOnDismiss} />
             </RowBetween>
-            <TYPE.body>Earned UNI tokens represent voting shares in Uniswap governance.</TYPE.body>
-            <TYPE.body>
-              You can either vote on each proposal yourself or delegate your votes to a third party.
-            </TYPE.body>
+            <ThemedText.DeprecatedBody>
+              <Trans>Earned UNI tokens represent voting shares in Uniswap governance.</Trans>
+            </ThemedText.DeprecatedBody>
+            <ThemedText.DeprecatedBody>
+              <Trans>You can either vote on each proposal yourself or delegate your votes to a third party.</Trans>
+            </ThemedText.DeprecatedBody>
             {usingDelegate && <AddressInputPanel value={typed} onChange={handleRecipientType} />}
             <ButtonPrimary disabled={!isAddress(parsedAddress ?? '')} onClick={onDelegate}>
-              <TYPE.mediumHeader color="white">{usingDelegate ? 'Delegate Votes' : 'Self Delegate'}</TYPE.mediumHeader>
+              <ThemedText.DeprecatedMediumHeader color="white">
+                {usingDelegate ? <Trans>Delegate Votes</Trans> : <Trans>Self Delegate</Trans>}
+              </ThemedText.DeprecatedMediumHeader>
             </ButtonPrimary>
             <TextButton onClick={() => setUsingDelegate(!usingDelegate)}>
-              <TYPE.blue>
-                {usingDelegate ? 'Remove' : 'Add'} Delegate {!usingDelegate && '+'}
-              </TYPE.blue>
+              <ThemedText.DeprecatedBlue>
+                {usingDelegate ? <Trans>Remove Delegate</Trans> : <Trans>Add Delegate +</Trans>}
+              </ThemedText.DeprecatedBlue>
             </TextButton>
           </AutoColumn>
         </ContentWrapper>
       )}
       {attempting && !hash && (
-        <LoadingView onDismiss={wrappedOndismiss}>
-          <AutoColumn gap="12px" justify={'center'}>
-            <TYPE.largeHeader>{usingDelegate ? 'Delegating votes' : 'Unlocking Votes'}</TYPE.largeHeader>
-            <TYPE.main fontSize={36}>{uniBalance?.toSignificant(4)}</TYPE.main>
+        <LoadingView onDismiss={wrappedOnDismiss}>
+          <AutoColumn gap="md" justify="center">
+            <ThemedText.DeprecatedLargeHeader>
+              {usingDelegate ? <Trans>Delegating votes</Trans> : <Trans>Unlocking Votes</Trans>}
+            </ThemedText.DeprecatedLargeHeader>
+            <ThemedText.DeprecatedMain fontSize={36}> {formatCurrencyAmount(uniBalance, 4)}</ThemedText.DeprecatedMain>
           </AutoColumn>
         </LoadingView>
       )}
       {hash && (
-        <SubmittedView onDismiss={wrappedOndismiss} hash={hash}>
-          <AutoColumn gap="12px" justify={'center'}>
-            <TYPE.largeHeader>Transaction Submitted</TYPE.largeHeader>
-            <TYPE.main fontSize={36}>{uniBalance?.toSignificant(4)}</TYPE.main>
+        <SubmittedView onDismiss={wrappedOnDismiss} hash={hash}>
+          <AutoColumn gap="md" justify="center">
+            <ThemedText.DeprecatedLargeHeader>
+              <Trans>Transaction Submitted</Trans>
+            </ThemedText.DeprecatedLargeHeader>
+            <ThemedText.DeprecatedMain fontSize={36}>{formatCurrencyAmount(uniBalance, 4)}</ThemedText.DeprecatedMain>
           </AutoColumn>
         </SubmittedView>
       )}

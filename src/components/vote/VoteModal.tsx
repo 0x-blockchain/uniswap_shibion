@@ -1,18 +1,20 @@
-import React, { useState, useContext } from 'react'
-import { useActiveWeb3React } from '../../hooks'
+import { Trans } from '@lingui/macro'
+import { useWeb3React } from '@web3-react/core'
+import { useState } from 'react'
+import { ArrowUpCircle, X } from 'react-feather'
+import styled, { useTheme } from 'styled-components'
+import { formatCurrencyAmount } from 'utils/formatCurrencyAmount'
 
-import Modal from '../Modal'
-import { AutoColumn, ColumnCenter } from '../Column'
-import styled, { ThemeContext } from 'styled-components'
-import { RowBetween } from '../Row'
-import { TYPE, CustomLightSpinner } from '../../theme'
-import { X, ArrowUpCircle } from 'react-feather'
-import { ButtonPrimary } from '../Button'
 import Circle from '../../assets/images/blue-loader.svg'
-import { useVoteCallback, useUserVotes } from '../../state/governance/hooks'
-import { getEtherscanLink } from '../../utils'
-import { ExternalLink } from '../../theme/components'
-import { TokenAmount } from '@uniswap/sdk'
+import { useUserVotes, useVoteCallback } from '../../state/governance/hooks'
+import { VoteOption } from '../../state/governance/types'
+import { CustomLightSpinner, ThemedText } from '../../theme'
+import { ExternalLink } from '../../theme'
+import { ExplorerDataType, getExplorerLink } from '../../utils/getExplorerLink'
+import { ButtonPrimary } from '../Button'
+import { AutoColumn, ColumnCenter } from '../Column'
+import Modal from '../Modal'
+import { RowBetween } from '../Row'
 
 const ContentWrapper = styled(AutoColumn)`
   width: 100%;
@@ -37,28 +39,24 @@ const ConfirmedIcon = styled(ColumnCenter)`
 interface VoteModalProps {
   isOpen: boolean
   onDismiss: () => void
-  support: boolean // if user is for or against proposal
-  proposalId: string | undefined // id for the proposal to vote on
+  voteOption?: VoteOption
+  proposalId?: string // id for the proposal to vote on
 }
 
-export default function VoteModal({ isOpen, onDismiss, proposalId, support }: VoteModalProps) {
-  const { chainId } = useActiveWeb3React()
-  const {
-    voteCallback
-  }: {
-    voteCallback: (proposalId: string | undefined, support: boolean) => Promise<string> | undefined
-  } = useVoteCallback()
-  const availableVotes: TokenAmount | undefined = useUserVotes()
+export default function VoteModal({ isOpen, onDismiss, proposalId, voteOption }: VoteModalProps) {
+  const { chainId } = useWeb3React()
+  const voteCallback = useVoteCallback()
+  const { votes: availableVotes } = useUserVotes()
 
   // monitor call to help UI loading state
   const [hash, setHash] = useState<string | undefined>()
   const [attempting, setAttempting] = useState<boolean>(false)
 
   // get theme for colors
-  const theme = useContext(ThemeContext)
+  const theme = useTheme()
 
   // wrapper to reset state on modal close
-  function wrappedOndismiss() {
+  function wrappedOnDismiss() {
     setHash(undefined)
     setAttempting(false)
     onDismiss()
@@ -68,10 +66,10 @@ export default function VoteModal({ isOpen, onDismiss, proposalId, support }: Vo
     setAttempting(true)
 
     // if callback not returned properly ignore
-    if (!voteCallback) return
+    if (!voteCallback || voteOption === undefined) return
 
     // try delegation and store hash
-    const hash = await voteCallback(proposalId, support)?.catch(error => {
+    const hash = await voteCallback(proposalId, voteOption)?.catch((error) => {
       setAttempting(false)
       console.log(error)
     })
@@ -82,21 +80,35 @@ export default function VoteModal({ isOpen, onDismiss, proposalId, support }: Vo
   }
 
   return (
-    <Modal isOpen={isOpen} onDismiss={wrappedOndismiss} maxHeight={90}>
+    <Modal isOpen={isOpen} onDismiss={wrappedOnDismiss} maxHeight={90}>
       {!attempting && !hash && (
         <ContentWrapper gap="lg">
           <AutoColumn gap="lg" justify="center">
             <RowBetween>
-              <TYPE.mediumHeader fontWeight={500}>{`Vote ${
-                support ? 'for ' : 'against'
-              } proposal ${proposalId}`}</TYPE.mediumHeader>
-              <StyledClosed stroke="black" onClick={wrappedOndismiss} />
+              <ThemedText.DeprecatedMediumHeader fontWeight={535}>
+                {voteOption === VoteOption.Against ? (
+                  <Trans>Vote against proposal {proposalId}</Trans>
+                ) : voteOption === VoteOption.For ? (
+                  <Trans>Vote for proposal {proposalId}</Trans>
+                ) : (
+                  <Trans>Vote to abstain on proposal {proposalId}</Trans>
+                )}
+              </ThemedText.DeprecatedMediumHeader>
+              <StyledClosed onClick={wrappedOnDismiss} />
             </RowBetween>
-            <TYPE.largeHeader>{availableVotes?.toSignificant(4)} Votes</TYPE.largeHeader>
+            <ThemedText.DeprecatedLargeHeader>
+              <Trans>{formatCurrencyAmount(availableVotes, 4)} Votes</Trans>
+            </ThemedText.DeprecatedLargeHeader>
             <ButtonPrimary onClick={onVote}>
-              <TYPE.mediumHeader color="white">{`Vote ${
-                support ? 'for ' : 'against'
-              } proposal  ${proposalId}`}</TYPE.mediumHeader>
+              <ThemedText.DeprecatedMediumHeader color="white">
+                {voteOption === VoteOption.Against ? (
+                  <Trans>Vote against proposal {proposalId}</Trans>
+                ) : voteOption === VoteOption.For ? (
+                  <Trans>Vote for proposal {proposalId}</Trans>
+                ) : (
+                  <Trans>Vote to abstain on proposal {proposalId}</Trans>
+                )}
+              </ThemedText.DeprecatedMediumHeader>
             </ButtonPrimary>
           </AutoColumn>
         </ContentWrapper>
@@ -105,16 +117,20 @@ export default function VoteModal({ isOpen, onDismiss, proposalId, support }: Vo
         <ConfirmOrLoadingWrapper>
           <RowBetween>
             <div />
-            <StyledClosed onClick={wrappedOndismiss} />
+            <StyledClosed onClick={wrappedOnDismiss} />
           </RowBetween>
           <ConfirmedIcon>
-            <CustomLightSpinner src={Circle} alt="loader" size={'90px'} />
+            <CustomLightSpinner src={Circle} alt="loader" size="90px" />
           </ConfirmedIcon>
-          <AutoColumn gap="100px" justify={'center'}>
-            <AutoColumn gap="12px" justify={'center'}>
-              <TYPE.largeHeader>Submitting Vote</TYPE.largeHeader>
+          <AutoColumn gap="100px" justify="center">
+            <AutoColumn gap="md" justify="center">
+              <ThemedText.DeprecatedLargeHeader>
+                <Trans>Submitting Vote</Trans>
+              </ThemedText.DeprecatedLargeHeader>
             </AutoColumn>
-            <TYPE.subHeader>Confirm this transaction in your wallet</TYPE.subHeader>
+            <ThemedText.DeprecatedSubHeader>
+              <Trans>Confirm this transaction in your wallet</Trans>
+            </ThemedText.DeprecatedSubHeader>
           </AutoColumn>
         </ConfirmOrLoadingWrapper>
       )}
@@ -122,18 +138,25 @@ export default function VoteModal({ isOpen, onDismiss, proposalId, support }: Vo
         <ConfirmOrLoadingWrapper>
           <RowBetween>
             <div />
-            <StyledClosed onClick={wrappedOndismiss} />
+            <StyledClosed onClick={wrappedOnDismiss} />
           </RowBetween>
           <ConfirmedIcon>
-            <ArrowUpCircle strokeWidth={0.5} size={90} color={theme.primary1} />
+            <ArrowUpCircle strokeWidth={0.5} size={90} color={theme.accent1} />
           </ConfirmedIcon>
-          <AutoColumn gap="100px" justify={'center'}>
-            <AutoColumn gap="12px" justify={'center'}>
-              <TYPE.largeHeader>Transaction Submitted</TYPE.largeHeader>
+          <AutoColumn gap="100px" justify="center">
+            <AutoColumn gap="md" justify="center">
+              <ThemedText.DeprecatedLargeHeader>
+                <Trans>Transaction Submitted</Trans>
+              </ThemedText.DeprecatedLargeHeader>
             </AutoColumn>
             {chainId && (
-              <ExternalLink href={getEtherscanLink(chainId, hash, 'transaction')} style={{ marginLeft: '4px' }}>
-                <TYPE.subHeader>View transaction on Etherscan</TYPE.subHeader>
+              <ExternalLink
+                href={getExplorerLink(chainId, hash, ExplorerDataType.TRANSACTION)}
+                style={{ marginLeft: '4px' }}
+              >
+                <ThemedText.DeprecatedSubHeader>
+                  <Trans>View transaction on Explorer</Trans>
+                </ThemedText.DeprecatedSubHeader>
               </ExternalLink>
             )}
           </AutoColumn>

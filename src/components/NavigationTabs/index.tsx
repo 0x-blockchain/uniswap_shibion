@@ -1,100 +1,118 @@
-import React from 'react'
-import styled from 'styled-components'
-import { darken } from 'polished'
-import { useTranslation } from 'react-i18next'
-import { NavLink, Link as HistoryLink } from 'react-router-dom'
-
+import { Trans } from '@lingui/macro'
+import { Percent } from '@uniswap/sdk-core'
+import { useWeb3React } from '@web3-react/core'
+import { ReactNode } from 'react'
 import { ArrowLeft } from 'react-feather'
+import { Link, useLocation } from 'react-router-dom'
+import { Box } from 'rebass'
+import { useAppDispatch } from 'state/hooks'
+import { resetMintState } from 'state/mint/actions'
+import { resetMintState as resetMintV3State } from 'state/mint/v3/actions'
+import styled, { useTheme } from 'styled-components'
+import { ThemedText } from 'theme'
+import { flexRowNoWrap } from 'theme/styles'
+
 import { RowBetween } from '../Row'
-import QuestionHelper from '../QuestionHelper'
+import SettingsTab from '../Settings'
 
 const Tabs = styled.div`
-  ${({ theme }) => theme.flexRowNoWrap}
+  ${flexRowNoWrap};
   align-items: center;
   border-radius: 3rem;
   justify-content: space-evenly;
 `
 
-const activeClassName = 'ACTIVE'
+const StyledLink = styled(Link)<{ flex?: string }>`
+  flex: ${({ flex }) => flex ?? 'none'};
 
-const StyledNavLink = styled(NavLink).attrs({
-  activeClassName
-})`
-  ${({ theme }) => theme.flexRowNoWrap}
-  align-items: center;
-  justify-content: center;
-  height: 3rem;
-  border-radius: 3rem;
-  outline: none;
-  cursor: pointer;
-  text-decoration: none;
-  color: ${({ theme }) => theme.text3};
-  font-size: 20px;
-
-  &.${activeClassName} {
-    border-radius: 12px;
-    font-weight: 500;
-    color: ${({ theme }) => theme.text1};
-  }
-
-  :hover,
-  :focus {
-    color: ${({ theme }) => darken(0.1, theme.text1)};
-  }
+  ${({ theme }) => theme.deprecated_mediaWidth.deprecated_upToMedium`
+    flex: none;
+    margin-right: 10px;
+  `};
 `
 
-const ActiveText = styled.div`
-  font-weight: 500;
-  font-size: 20px;
+const FindPoolTabsText = styled(ThemedText.SubHeaderLarge)`
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
 `
 
 const StyledArrowLeft = styled(ArrowLeft)`
-  color: ${({ theme }) => theme.text1};
+  color: ${({ theme }) => theme.neutral1};
 `
 
-export function SwapPoolTabs({ active }: { active: 'swap' | 'pool' }) {
-  const { t } = useTranslation()
-  return (
-    <Tabs style={{ marginBottom: '20px', display: 'none' }}>
-      <StyledNavLink id={`swap-nav-link`} to={'/swap'} isActive={() => active === 'swap'}>
-        {t('swap')}
-      </StyledNavLink>
-      <StyledNavLink id={`pool-nav-link`} to={'/pool'} isActive={() => active === 'pool'}>
-        {t('pool')}
-      </StyledNavLink>
-    </Tabs>
-  )
-}
-
-export function FindPoolTabs() {
+export function FindPoolTabs({ origin }: { origin: string }) {
   return (
     <Tabs>
-      <RowBetween style={{ padding: '1rem' }}>
-        <HistoryLink to="/pool">
+      <RowBetween style={{ padding: '1rem 1rem 0 1rem', position: 'relative' }}>
+        <Link to={origin}>
           <StyledArrowLeft />
-        </HistoryLink>
-        <ActiveText>Import Pool</ActiveText>
-        <QuestionHelper text={"Use this tool to find pairs that don't automatically appear in the interface."} />
+        </Link>
+        <FindPoolTabsText>
+          <Trans>Import V2 Pool</Trans>
+        </FindPoolTabsText>
       </RowBetween>
     </Tabs>
   )
 }
 
-export function AddRemoveTabs({ adding, creating }: { adding: boolean; creating: boolean }) {
+const AddRemoveTitleText = styled(ThemedText.SubHeaderLarge)`
+  flex: 1;
+  margin: auto;
+`
+
+export function AddRemoveTabs({
+  adding,
+  creating,
+  autoSlippage,
+  positionID,
+  children,
+}: {
+  adding: boolean
+  creating: boolean
+  autoSlippage: Percent
+  positionID?: string
+  showBackLink?: boolean
+  children?: ReactNode
+}) {
+  const { chainId } = useWeb3React()
+  const theme = useTheme()
+  // reset states on back
+  const dispatch = useAppDispatch()
+  const location = useLocation()
+
+  // detect if back should redirect to v3 or v2 pool page
+  const poolLink = location.pathname.includes('add/v2')
+    ? '/pools/v2'
+    : '/pools' + (positionID ? `/${positionID.toString()}` : '')
+
   return (
     <Tabs>
-      <RowBetween style={{ padding: '1rem' }}>
-        <HistoryLink to="/pool">
-          <StyledArrowLeft />
-        </HistoryLink>
-        <ActiveText>{creating ? 'Create a Pair' : adding ? 'Add Liquidity' : 'Remove Liquidity'}</ActiveText>
-        <QuestionHelper
-          text={
-            adding
-              ? 'When you add liquidity, you are given pool tokens representing your position. These tokens automatically earn fees proportional to your share of the pool, and can be redeemed at any time.'
-              : 'Removing pool tokens converts your position back into underlying tokens at the current rate, proportional to your share of the pool. Accrued fees are included in the amounts you receive.'
-          }
-        />
+      <RowBetween style={{ padding: '1rem 1rem 0 1rem' }}>
+        <StyledLink
+          to={poolLink}
+          onClick={() => {
+            if (adding) {
+              // not 100% sure both of these are needed
+              dispatch(resetMintState())
+              dispatch(resetMintV3State())
+            }
+          }}
+          flex={children ? '1' : undefined}
+        >
+          <StyledArrowLeft stroke={theme.neutral2} />
+        </StyledLink>
+        <AddRemoveTitleText textAlign={children ? 'start' : 'center'}>
+          {creating ? (
+            <Trans>Create a pair</Trans>
+          ) : adding ? (
+            <Trans>Add Liquidity</Trans>
+          ) : (
+            <Trans>Remove Liquidity</Trans>
+          )}
+        </AddRemoveTitleText>
+        {children && <Box style={{ marginRight: '.5rem' }}>{children}</Box>}
+        <SettingsTab autoSlippage={autoSlippage} chainId={chainId} />
       </RowBetween>
     </Tabs>
   )

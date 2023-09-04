@@ -1,38 +1,64 @@
-import { Trade } from '@uniswap/sdk'
-import React, { Fragment, memo, useContext } from 'react'
-import { ChevronRight } from 'react-feather'
-import { Flex } from 'rebass'
-import { ThemeContext } from 'styled-components'
-import { TYPE } from '../../theme'
-import CurrencyLogo from '../CurrencyLogo'
+import { Trans } from '@lingui/macro'
+import { useWeb3React } from '@web3-react/core'
+import Column from 'components/Column'
+import { LoadingRows } from 'components/Loader/styled'
+import RoutingDiagram from 'components/RoutingDiagram/RoutingDiagram'
+import { SUPPORTED_GAS_ESTIMATE_CHAIN_IDS } from 'constants/chains'
+import useAutoRouterSupported from 'hooks/useAutoRouterSupported'
+import { ClassicTrade } from 'state/routing/types'
+import { Separator, ThemedText } from 'theme'
+import getRoutingDiagramEntries from 'utils/getRoutingDiagramEntries'
 
-export default memo(function SwapRoute({ trade }: { trade: Trade }) {
-  const theme = useContext(ThemeContext)
+import RouterLabel from '../RouterLabel'
+
+export default function SwapRoute({ trade, syncing }: { trade: ClassicTrade; syncing: boolean }) {
+  const { chainId } = useWeb3React()
+  const autoRouterSupported = useAutoRouterSupported()
+
+  const routes = getRoutingDiagramEntries(trade)
+
+  const gasPrice =
+    // TODO(WEB-2022)
+    // Can `trade.gasUseEstimateUSD` be defined when `chainId` is not in `SUPPORTED_GAS_ESTIMATE_CHAIN_IDS`?
+    trade.gasUseEstimateUSD && chainId && SUPPORTED_GAS_ESTIMATE_CHAIN_IDS.includes(chainId)
+      ? trade.gasUseEstimateUSD === 0
+        ? '<$0.01'
+        : '$' + trade.gasUseEstimateUSD.toFixed(2)
+      : undefined
+
   return (
-    <Flex
-      px="1rem"
-      py="0.5rem"
-      my="0.5rem"
-      style={{ border: `1px solid ${theme.bg3}`, borderRadius: '1rem' }}
-      flexWrap="wrap"
-      width="100%"
-      justifyContent="space-evenly"
-      alignItems="center"
-    >
-      {trade.route.path.map((token, i, path) => {
-        const isLastItem: boolean = i === path.length - 1
-        return (
-          <Fragment key={i}>
-            <Flex my="0.5rem" alignItems="center" style={{ flexShrink: 0 }}>
-              <CurrencyLogo currency={token} size="1.5rem" />
-              <TYPE.black fontSize={14} color={theme.text1} ml="0.5rem">
-                {token.symbol}
-              </TYPE.black>
-            </Flex>
-            {isLastItem ? null : <ChevronRight color={theme.text2} />}
-          </Fragment>
-        )
-      })}
-    </Flex>
+    <Column gap="md">
+      <RouterLabel trade={trade} />
+      <Separator />
+      {syncing ? (
+        <LoadingRows>
+          <div style={{ width: '100%', height: '30px' }} />
+        </LoadingRows>
+      ) : (
+        <RoutingDiagram
+          currencyIn={trade.inputAmount.currency}
+          currencyOut={trade.outputAmount.currency}
+          routes={routes}
+        />
+      )}
+      {autoRouterSupported && (
+        <>
+          <Separator />
+          {syncing ? (
+            <LoadingRows>
+              <div style={{ width: '100%', height: '15px' }} />
+            </LoadingRows>
+          ) : (
+            <ThemedText.BodySmall color="neutral2">
+              {gasPrice ? <Trans>Best price route costs ~{gasPrice} in gas.</Trans> : null}{' '}
+              <Trans>
+                This route optimizes your total output by considering split routes, multiple hops, and the gas cost of
+                each step.
+              </Trans>
+            </ThemedText.BodySmall>
+          )}
+        </>
+      )}
+    </Column>
   )
-})
+}
