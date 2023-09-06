@@ -1,10 +1,10 @@
 import { Trans } from '@lingui/macro'
 import { BrowserEvent, InterfaceElementName, InterfacePageName, SharedEventName } from '@uniswap/analytics-events'
 import { Trace, TraceEvent } from 'analytics'
-import { AboutFooter } from 'components/About/AboutFooter'
+// import { AboutFooter } from 'components/About/AboutFooter'
 import Card, { CardType } from 'components/About/Card'
 import { MAIN_CARDS, MORE_CARDS } from 'components/About/constants'
-import ProtocolBanner from 'components/About/ProtocolBanner'
+// import ProtocolBanner from 'components/About/ProtocolBanner'
 import { useAccountDrawer } from 'components/AccountDrawer'
 import { BaseButton } from 'components/Button'
 import { AppleLogo } from 'components/Logo/AppleLogo'
@@ -372,14 +372,14 @@ export default function Landing() {
               </ButtonCTA>
             </TraceEvent>
           </ActionsContainer>
-          <LearnMoreContainer
+          {/* <LearnMoreContainer
             onClick={() => {
               cardsRef?.current?.scrollIntoView({ behavior: 'smooth' })
             }}
           >
             <Trans>Learn more</Trans>
             <LearnMoreArrow />
-          </LearnMoreContainer>
+          </LearnMoreContainer> */}
 
           <DownloadWalletLink
             {...getDownloadAppLinkProps({
@@ -392,8 +392,8 @@ export default function Landing() {
             Download the Uniswap Wallet for iOS
           </DownloadWalletLink>
         </ContentContainer>
-        <AboutContentContainer isDarkMode={isDarkMode}>
-          <CardGrid cols={cards.length} ref={cardsRef}>
+        {/* <AboutContentContainer isDarkMode={isDarkMode}> */}
+          {/* <CardGrid cols={cards.length} ref={cardsRef}>
             {cards.map(({ darkBackgroundImgSrc, lightBackgroundImgSrc, ...card }) => (
               <Card
                 {...card}
@@ -406,10 +406,10 @@ export default function Landing() {
             {MORE_CARDS.map(({ darkIcon, lightIcon, ...card }) => (
               <Card {...card} icon={isDarkMode ? darkIcon : lightIcon} key={card.title} type={CardType.Secondary} />
             ))}
-          </CardGrid>
-          <ProtocolBanner />
-          <AboutFooter />
-        </AboutContentContainer>
+          </CardGrid> */}
+          {/* <ProtocolBanner /> */}
+          {/* <AboutFooter /> */}
+        {/* </AboutContentContainer> */}
       </PageContainer>
     </Trace>
   )

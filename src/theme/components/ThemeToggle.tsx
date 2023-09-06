@@ -14,9 +14,9 @@ const THEME_UPDATE_DELAY = ms(`0.1s`)
 const DARKMODE_MEDIA_QUERY = window.matchMedia('(prefers-color-scheme: dark)')
 
 export enum ThemeMode {
+  AUTO,
   LIGHT,
   DARK,
-  AUTO,
 }
 
 // Tracks the device theme
@@ -47,8 +47,6 @@ export function SystemThemeUpdater() {
 
 export function useIsDarkMode(): boolean {
   const mode = useAtomValue(themeModeAtom)
-  const systemTheme = useAtomValue(systemThemeAtom)
-
   return (mode === ThemeMode.AUTO ? ThemeMode.DARK : mode) === ThemeMode.DARK
 }
 
